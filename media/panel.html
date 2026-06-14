@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: transparent;
+      padding: 0;
+      overflow-x: hidden;
+    }
+
+    .glass-container {
+      position: relative;
+      margin: 8px;
+      padding: 16px 18px;
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 14px;
+      box-shadow:
+        0 4px 24px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      color: var(--vscode-foreground, #e0e0e0);
+      font-size: 12.5px;
+      line-height: 1.6;
+      min-height: 100px;
+      animation: fadeIn 0.3s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .close-btn {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--vscode-foreground, #999);
+      font-size: 11px;
+      transition: background 0.2s;
+    }
+
+    .close-btn:hover {
+      background: rgba(255, 80, 80, 0.3);
+    }
+
+    .file-name {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      padding-right: 24px;
+      opacity: 0.9;
+    }
+
+    .section {
+      margin-bottom: 10px;
+    }
+
+    .section-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      opacity: 0.5;
+      margin-bottom: 3px;
+    }
+
+    .section-content {
+      opacity: 0.9;
+    }
+
+    .diff-added {
+      color: #4ec994;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 11.5px;
+    }
+
+    .diff-removed {
+      color: #f87171;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 11.5px;
+    }
+
+    .verdict-positive {
+      color: #4ec994;
+      font-weight: 500;
+    }
+
+    .verdict-negative {
+      color: #f87171;
+      font-weight: 500;
+    }
+
+    .verdict-neutral {
+      color: #fbbf24;
+      font-weight: 500;
+    }
+
+    .loading {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      opacity: 0.6;
+    }
+
+    .loading-dot {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--vscode-foreground, #e0e0e0);
+      animation: pulse 1.2s infinite;
+    }
+
+    .loading-dot:nth-child(2) { animation-delay: 0.2s; }
+    .loading-dot:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes pulse {
+      0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+      40% { opacity: 1; transform: scale(1); }
+    }
+
+    .stream-cursor {
+      display: inline-block;
+      width: 2px;
+      height: 13px;
+      background: var(--vscode-foreground, #e0e0e0);
+      margin-left: 2px;
+      animation: blink 0.8s infinite;
+      vertical-align: middle;
+    }
+
+    @keyframes blink {
+      0%, 50% { opacity: 1; }
+      51%, 100% { opacity: 0; }
+    }
+
+    .error {
+      color: #f87171;
+      padding: 8px;
+      border: 1px solid rgba(248, 113, 113, 0.3);
+      border-radius: 8px;
+      background: rgba(248, 113, 113, 0.05);
+    }
+  </style>
+</head>
+<body>
+  <div class="glass-container">
+    <div class="close-btn" id="closeBtn">✕</div>
+    <div id="content">
+      <div class="loading">
+        <div class="loading-dot"></div>
+        <div class="loading-dot"></div>
+        <div class="loading-dot"></div>
+        <span style="margin-left: 4px;">Analyzing...</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const vscode = acquireVsCodeApi();
+    const content = document.getElementById('content');
+    let streamBuffer = '';
+
+    document.getElementById('closeBtn').addEventListener('click', () => {
+      vscode.postMessage({ type: 'close' });
+    });
+
+    window.addEventListener('message', event => {
+      const message = event.data;
+
+      switch (message.type) {
+        case 'startStream':
+          streamBuffer = '';
+          content.innerHTML = `<div class="file-name">${escapeHtml(message.fileName)}</div><div class="stream-content"></div>`;
+          break;
+
+        case 'streamChunk':
+          streamBuffer += message.text;
+          const streamEl = content.querySelector('.stream-content');
+          if (streamEl) {
+            streamEl.innerHTML = formatBrief(streamBuffer) + '<span class="stream-cursor"></span>';
+            window.scrollTo(0, document.body.scrollHeight);
+          }
+          break;
+
+        case 'endStream':
+          const finalEl = content.querySelector('.stream-content');
+          if (finalEl) {
+            finalEl.innerHTML = formatBrief(streamBuffer);
+          }
+          break;
+
+        case 'error':
+          content.innerHTML = `<div class="error">${escapeHtml(message.text)}</div>`;
+          break;
+
+        case 'loading':
+          content.innerHTML = `
+            <div class="file-name">${escapeHtml(message.fileName || '')}</div>
+            <div class="loading">
+              <div class="loading-dot"></div>
+              <div class="loading-dot"></div>
+              <div class="loading-dot"></div>
+              <span style="margin-left: 4px;">${escapeHtml(message.text || 'Analyzing...')}</span>
+            </div>`;
+          break;
+      }
+    });
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function formatBrief(text) {
+      let html = escapeHtml(text);
+
+      // Format section headers (lines starting with ##)
+      html = html.replace(/^## (.+)$/gm, '<div class="section-label">$1</div>');
+
+      // Format diff lines
+      html = html.replace(/^\+ (.+)$/gm, '<span class="diff-added">+ $1</span>');
+      html = html.replace(/^- (.+)$/gm, '<span class="diff-removed">- $1</span>');
+
+      // Format verdict markers
+      html = html.replace(/\[GOOD\]/g, '<span class="verdict-positive">✓</span>');
+      html = html.replace(/\[WARN\]/g, '<span class="verdict-negative">⚠</span>');
+      html = html.replace(/\[NOTE\]/g, '<span class="verdict-neutral">●</span>');
+
+      // Convert newlines to breaks
+      html = html.replace(/\n/g, '<br>');
+
+      return html;
+    }
+  </script>
+</body>
+</html>
