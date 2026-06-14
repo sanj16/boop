@@ -24,8 +24,30 @@
       {
         "command": "boop.reviewChanges",
         "title": "Boop: Review Changes"
+      },
+      {
+        "command": "boop.togglePanel",
+        "title": "Boop: Toggle Panel"
       }
     ],
+    "views": {
+      "boop-sidebar": [
+        {
+          "type": "webview",
+          "id": "boop.view",
+          "name": "boop"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "boop-sidebar",
+          "title": "boop",
+          "icon": "resources/info.svg"
+        }
+      ]
+    },
     "configuration": {
       "title": "boop",
       "properties": {

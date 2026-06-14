@@ -28,6 +28,11 @@ export function activate(context: vscode.ExtensionContext) {
   initGraph(context);
   boopPanel = new BoopPanel(context);
 
+  // Register as webview view provider for sidebar
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider('boop.view', boopPanel)
+  );
+
   // Clear cache when panel is fully closed
   boopPanel.onDispose(() => {
     clearCache();

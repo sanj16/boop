@@ -19,16 +19,7 @@
 
     .glass-container {
       position: relative;
-      margin: 8px;
-      padding: 16px 18px;
-      background: rgba(255, 255, 255, 0.08);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 14px;
-      box-shadow:
-        0 4px 24px rgba(0, 0, 0, 0.12),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      padding: 12px 14px;
       color: var(--vscode-foreground, #e0e0e0);
       font-size: 12.5px;
       line-height: 1.6;
@@ -41,33 +32,11 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
-    .close-btn {
-      position: absolute;
-      top: 10px;
-      right: 12px;
-      background: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 50%;
-      width: 20px;
-      height: 20px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      color: var(--vscode-foreground, #999);
-      font-size: 11px;
-      transition: background 0.2s;
-    }
-
-    .close-btn:hover {
-      background: rgba(255, 80, 80, 0.3);
-    }
 
     .file-name {
       font-size: 13px;
       font-weight: 600;
       margin-bottom: 10px;
-      padding-right: 24px;
       opacity: 0.9;
     }
 
@@ -240,7 +209,6 @@
 </head>
 <body>
   <div class="glass-container">
-    <div class="close-btn" id="closeBtn">✕</div>
     <div id="content">
       <div class="loading">
         <div class="loading-dot"></div>
@@ -255,10 +223,6 @@
     const vscode = acquireVsCodeApi();
     const content = document.getElementById('content');
     let streamBuffer = '';
-
-    document.getElementById('closeBtn').addEventListener('click', () => {
-      vscode.postMessage({ type: 'close' });
-    });
 
     window.addEventListener('message', event => {
       const message = event.data;

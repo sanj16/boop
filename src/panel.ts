@@ -2,13 +2,48 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 
-export class BoopPanel {
-  private panel: vscode.WebviewPanel | null = null;
+export class BoopPanel implements vscode.WebviewViewProvider {
+  private view: vscode.WebviewView | null = null;
   private context: vscode.ExtensionContext;
   private disposeCallbacks: Array<() => void> = [];
+  private pendingMessages: any[] = [];
 
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
+  }
+
+  resolveWebviewView(
+    webviewView: vscode.WebviewView,
+    _context: vscode.WebviewViewResolveContext,
+    _token: vscode.CancellationToken
+  ): void {
+    this.view = webviewView;
+
+    webviewView.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [
+        vscode.Uri.file(path.join(this.context.extensionPath, 'media'))
+      ]
+    };
+
+    webviewView.webview.html = this.getHtml();
+
+    webviewView.webview.onDidReceiveMessage((message) => {
+      if (message.type === 'close') {
+        this.hide();
+      }
+    });
+
+    webviewView.onDidDispose(() => {
+      this.view = null;
+      this.disposeCallbacks.forEach((cb) => cb());
+    });
+
+    // Flush any messages that were queued before the view resolved
+    for (const msg of this.pendingMessages) {
+      webviewView.webview.postMessage(msg);
+    }
+    this.pendingMessages = [];
   }
 
   onDispose(callback: () => void): void {
@@ -16,63 +51,40 @@ export class BoopPanel {
   }
 
   get isVisible(): boolean {
-    return this.panel !== null;
+    return this.view !== null && this.view.visible;
   }
 
   show(): void {
-    if (this.panel) {
-      return;
+    if (this.view) {
+      this.view.show?.(true);
+    } else {
+      vscode.commands.executeCommand('boop.view.focus');
     }
+  }
 
-    this.panel = vscode.window.createWebviewPanel(
-      'boopBrief',
-      'boop',
-      { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
-      {
-        enableScripts: true,
-        localResourceRoots: [
-          vscode.Uri.file(path.join(this.context.extensionPath, 'media'))
-        ]
-      }
-    );
-
-    this.panel.webview.html = this.getHtml();
-
-    this.panel.webview.onDidReceiveMessage(
-      (message) => {
-        if (message.type === 'close') {
-          this.dispose();
-        }
-      },
-      undefined,
-      this.context.subscriptions
-    );
-
-    this.panel.onDidDispose(() => {
-      this.panel = null;
-      this.disposeCallbacks.forEach((cb) => cb());
-    });
+  hide(): void {
+    // Can't programmatically hide a sidebar view, but we can collapse it
+    vscode.commands.executeCommand('workbench.action.closeSidebar');
   }
 
   dispose(): void {
-    if (this.panel) {
-      this.panel.dispose();
-      this.panel = null;
-      this.disposeCallbacks.forEach((cb) => cb());
-    }
+    this.hide();
+    this.disposeCallbacks.forEach((cb) => cb());
   }
 
   toggle(): void {
-    if (this.panel) {
-      this.dispose();
+    if (this.isVisible) {
+      this.hide();
     } else {
       this.show();
     }
   }
 
   sendMessage(message: any): void {
-    if (this.panel) {
-      this.panel.webview.postMessage(message);
+    if (this.view) {
+      this.view.webview.postMessage(message);
+    } else {
+      this.pendingMessages.push(message);
     }
   }
 
