@@ -36,8 +36,8 @@
         },
         "boop.autoShow": {
           "type": "boolean",
-          "default": false,
-          "description": "Automatically show file brief when opening a file"
+          "default": true,
+          "description": "Automatically show file brief when opening/switching files"
         },
         "boop.model": {
           "type": "string",

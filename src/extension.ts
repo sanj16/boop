@@ -100,11 +100,16 @@ export function activate(context: vscode.ExtensionContext) {
 
   const fileOpen = vscode.window.onDidChangeActiveTextEditor(async (editor) => {
     if (!editor) return;
+    // Ignore non-file schemes (output panels, settings, webviews)
+    if (editor.document.uri.scheme !== 'file') return;
 
+    lastDocument = editor.document;
     await indexFile(editor.document);
 
     const config = vscode.workspace.getConfiguration('boop');
     if (config.get<boolean>('autoShow')) {
+      cancelCurrentStream();
+      lastMode = 'brief';
       runBrief(editor.document);
     }
   });

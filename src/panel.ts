@@ -21,7 +21,6 @@ export class BoopPanel {
 
   show(): void {
     if (this.panel) {
-      this.panel.reveal(vscode.ViewColumn.Beside);
       return;
     }
 
