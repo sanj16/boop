@@ -80,9 +80,32 @@
       margin-top: 10px;
     }
 
-    .verdict-positive { color: #4ec994; font-weight: 500; }
-    .verdict-negative { color: #f87171; font-weight: 500; }
-    .verdict-neutral { color: #fbbf24; font-weight: 500; }
+    .verdict-positive { color: #4ec994; font-weight: 500; font-size: 12px; }
+    .verdict-negative { color: #f87171; font-weight: 500; font-size: 12px; }
+    .verdict-neutral { color: #fbbf24; font-weight: 500; font-size: 12px; }
+
+    .code-highlight {
+      background: rgba(139, 92, 246, 0.15);
+      color: #c4b5fd;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 11px;
+    }
+
+    .bullet-point {
+      display: block;
+      padding: 4px 0 4px 12px;
+      border-left: 2px solid rgba(255, 255, 255, 0.1);
+      margin: 4px 0;
+    }
+
+    .personality-reaction {
+      font-style: italic;
+      opacity: 0.85;
+      margin-bottom: 6px;
+      display: block;
+    }
 
     .hot-indicator {
       display: inline-block;
@@ -329,13 +352,19 @@
       text = text.replace(/\r\n/g, '\n');
       let html = escapeHtml(text);
 
+      // Format inline code (backtick-wrapped) — must be before section headers
+      html = html.replace(/`([^`]+)`/g, '<span class="code-highlight">$1</span>');
+
       // Format section headers (lines starting with ##)
       html = html.replace(/^## (.+)$/gm, '<div class="section-label">$1</div>');
 
-      // Format verdict markers
-      html = html.replace(/\[GOOD\]/g, '<span class="verdict-positive">✓ GOOD</span>');
-      html = html.replace(/\[WARN\]/g, '<span class="verdict-negative">⚠ WARN</span>');
-      html = html.replace(/\[NOTE\]/g, '<span class="verdict-neutral">● NOTE</span>');
+      // Format verdict markers with personality
+      html = html.replace(/\[GOOD\]/g, '<span class="verdict-positive">🐶 nice!</span>');
+      html = html.replace(/\[WARN\]/g, '<span class="verdict-negative">🐶 hmm, heads up...</span>');
+      html = html.replace(/\[NOTE\]/g, '<span class="verdict-neutral">🐶 fyi —</span>');
+
+      // Format bullet points (lines starting with - or •)
+      html = html.replace(/^[-•] (.+)$/gm, '<span class="bullet-point">$1</span>');
 
       // Convert newlines to breaks
       html = html.replace(/\n/g, '<br>');
