@@ -1,0 +1,72 @@
+{
+  "name": "boop",
+  "displayName": "boop",
+  "description": "Passive context companion — open a file, get an instant brief. Like a senior dev ghost who's already read everything.",
+  "version": "0.1.0",
+  "publisher": "sanj16",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "icon": "resources/icon.png",
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "boop.showBrief",
+        "title": "Boop: Show File Brief"
+      },
+      {
+        "command": "boop.reviewChanges",
+        "title": "Boop: Review Changes"
+      },
+      {
+        "command": "boop.debugGit",
+        "title": "Boop: Debug Git"
+      }
+    ],
+    "configuration": {
+      "title": "boop",
+      "properties": {
+        "boop.anthropicApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Your Anthropic API key for Claude"
+        },
+        "boop.autoShow": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically show file brief when opening a file"
+        },
+        "boop.model": {
+          "type": "string",
+          "default": "claude-sonnet-4-6",
+          "description": "Claude model to use for generating briefs"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run bundle",
+    "compile": "tsc -p ./",
+    "bundle": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "watch": "tsc -watch -p ./",
+    "dev": "npm run bundle && cp -r out media resources package.json ~/.cursor/extensions/sanj16.boop-0.1.0/ && cp -r out media resources package.json ~/.vscode/extensions/sanj16.boop-0.1.0/ && echo '✓ Updated. Reload both editors to apply.'"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.28.1",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "graphology": "^0.25.4",
+    "graphology-types": "^0.24.7"
+  }
+}
