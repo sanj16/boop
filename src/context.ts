@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { getDependencies, getDependents, getSymbols, getTotalCallSites } from './graph';
-import { getGitLogForFile, getLastEditInfo } from './git';
+import { getGitLogForFile, getLastEditInfo, getHotFileInfo, getFileOwners, HotFileInfo, FileOwner } from './git';
+import { detectEntrypoint, ProjectEntrypoint } from './entrypoint';
 
 export interface FileContext {
   fileName: string;
@@ -13,6 +14,9 @@ export interface FileContext {
   symbols: string[];
   gitLog: string;
   gitBlame: string;
+  hotFile: HotFileInfo;
+  owners: FileOwner[];
+  entrypoint: ProjectEntrypoint | null;
 }
 
 export async function gatherFileContext(document: vscode.TextDocument): Promise<FileContext> {
@@ -25,8 +29,14 @@ export async function gatherFileContext(document: vscode.TextDocument): Promise<
   const dependents = getDependents(filePath);
   const totalCallSites = getTotalCallSites(filePath);
   const symbols = getSymbols(filePath);
-  const gitLog = await getGitLogForFile(filePath);
-  const gitBlame = await getLastEditInfo(filePath);
+
+  const [gitLog, gitBlame, hotFile, owners, entrypoint] = await Promise.all([
+    getGitLogForFile(filePath),
+    getLastEditInfo(filePath),
+    getHotFileInfo(filePath),
+    getFileOwners(filePath),
+    detectEntrypoint(),
+  ]);
 
   return {
     fileName,
@@ -38,5 +48,8 @@ export async function gatherFileContext(document: vscode.TextDocument): Promise<
     symbols,
     gitLog,
     gitBlame,
+    hotFile,
+    owners,
+    entrypoint,
   };
 }

@@ -71,47 +71,101 @@
       opacity: 0.9;
     }
 
-    .section {
-      margin-bottom: 10px;
-    }
-
     .section-label {
       font-size: 10px;
       text-transform: uppercase;
       letter-spacing: 0.8px;
       opacity: 0.5;
       margin-bottom: 3px;
+      margin-top: 10px;
     }
 
-    .section-content {
-      opacity: 0.9;
+    .verdict-positive { color: #4ec994; font-weight: 500; }
+    .verdict-negative { color: #f87171; font-weight: 500; }
+    .verdict-neutral { color: #fbbf24; font-weight: 500; }
+
+    .hot-indicator {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .hot-stable { background: rgba(78, 201, 148, 0.15); color: #4ec994; }
+    .hot-active { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+    .hot-hot { background: rgba(248, 113, 113, 0.15); color: #f87171; }
+
+    /* Commands section */
+    .commands-trigger {
+      text-decoration: underline;
+      text-decoration-style: dotted;
+      cursor: pointer;
+      position: relative;
+      display: inline-block;
     }
 
-    .diff-added {
-      color: #4ec994;
+    .commands-trigger:hover .commands-tooltip {
+      display: block;
+    }
+
+    .commands-tooltip {
+      display: none;
+      position: absolute;
+      left: 0;
+      top: 100%;
+      margin-top: 4px;
+      background: rgba(30, 30, 35, 0.95);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      padding: 8px 0;
+      min-width: 220px;
+      z-index: 100;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    }
+
+    .command-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 5px 12px;
+      gap: 8px;
+    }
+
+    .command-row:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .command-label {
+      font-size: 10px;
+      opacity: 0.5;
+      min-width: 40px;
+    }
+
+    .command-text {
       font-family: 'SF Mono', 'Fira Code', monospace;
-      font-size: 11.5px;
+      font-size: 11px;
+      flex: 1;
     }
 
-    .diff-removed {
-      color: #f87171;
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      font-size: 11.5px;
+    .copy-btn {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 10px;
+      cursor: pointer;
+      color: var(--vscode-foreground, #ccc);
+      transition: background 0.2s;
     }
 
-    .verdict-positive {
+    .copy-btn:hover {
+      background: rgba(78, 201, 148, 0.3);
+    }
+
+    .copy-btn.copied {
+      background: rgba(78, 201, 148, 0.4);
       color: #4ec994;
-      font-weight: 500;
-    }
-
-    .verdict-negative {
-      color: #f87171;
-      font-weight: 500;
-    }
-
-    .verdict-neutral {
-      color: #fbbf24;
-      font-weight: 500;
     }
 
     .loading {
@@ -189,7 +243,8 @@
       switch (message.type) {
         case 'startStream':
           streamBuffer = '';
-          content.innerHTML = `<div class="file-name">${escapeHtml(message.fileName)}</div><div class="stream-content"></div>`;
+          const meta = message.metadata ? buildMetadataHtml(message.metadata) : '';
+          content.innerHTML = `<div class="file-name">${escapeHtml(message.fileName)}</div>${meta}<div class="stream-content"></div>`;
           break;
 
         case 'streamChunk':
@@ -213,6 +268,7 @@
           break;
 
         case 'loading':
+          metadataHtml = '';
           content.innerHTML = `
             <div class="file-name">${escapeHtml(message.fileName || '')}</div>
             <div class="loading">
@@ -231,25 +287,71 @@
       return div.innerHTML;
     }
 
+    function buildMetadataHtml(meta) {
+      let html = '';
+
+      // Run commands section
+      if (meta.commands && meta.commands.length > 0) {
+        const commandRows = meta.commands.map(c => {
+          return `<div class="command-row">
+            <span class="command-label">${escapeHtml(c.label)}</span>
+            <span class="command-text">${escapeHtml(c.command)}</span>
+            <button class="copy-btn" onclick="copyCommand(this, '${escapeHtml(c.command).replace(/'/g, "\\'")}')">copy</button>
+          </div>`;
+        }).join('');
+
+        const entryLabel = meta.mainFile ? `<span style="opacity:0.5;font-size:10px">Entry: ${escapeHtml(meta.mainFile)}</span><br>` : '';
+        const firstCmd = meta.commands[0].command;
+        html += `<div class="section-label">Run</div>`;
+        html += entryLabel;
+        html += `<span class="commands-trigger">${escapeHtml(firstCmd)}<div class="commands-tooltip">${commandRows}</div></span><br>`;
+      }
+
+      // Hot file status
+      if (meta.hotFile) {
+        const level = meta.hotFile.level;
+        const label = level === 'hot' ? '🔴 Hot' : level === 'active' ? '🟡 Active' : '🟢 Stable';
+        const cls = level === 'hot' ? 'hot-hot' : level === 'active' ? 'hot-active' : 'hot-stable';
+        html += `<div class="section-label">Status</div>`;
+        html += `<span class="hot-indicator ${cls}">${label}</span> <span style="opacity:0.6">${meta.hotFile.commits2Weeks} commits / 2wk, ${meta.hotFile.uniqueAuthors} authors</span><br>`;
+      }
+
+      // Owners / experts
+      if (meta.owners && meta.owners.length > 0) {
+        html += `<div class="section-label">Experts</div>`;
+        html += meta.owners.map(o => `${escapeHtml(o.name)} <span style="opacity:0.5">(${o.commits})</span>`).join(', ') + '<br>';
+      }
+
+      return html;
+    }
+
     function formatBrief(text) {
+      text = text.replace(/\r\n/g, '\n');
       let html = escapeHtml(text);
 
       // Format section headers (lines starting with ##)
       html = html.replace(/^## (.+)$/gm, '<div class="section-label">$1</div>');
 
-      // Format diff lines
-      html = html.replace(/^\+ (.+)$/gm, '<span class="diff-added">+ $1</span>');
-      html = html.replace(/^- (.+)$/gm, '<span class="diff-removed">- $1</span>');
-
       // Format verdict markers
-      html = html.replace(/\[GOOD\]/g, '<span class="verdict-positive">✓</span>');
-      html = html.replace(/\[WARN\]/g, '<span class="verdict-negative">⚠</span>');
-      html = html.replace(/\[NOTE\]/g, '<span class="verdict-neutral">●</span>');
+      html = html.replace(/\[GOOD\]/g, '<span class="verdict-positive">✓ GOOD</span>');
+      html = html.replace(/\[WARN\]/g, '<span class="verdict-negative">⚠ WARN</span>');
+      html = html.replace(/\[NOTE\]/g, '<span class="verdict-neutral">● NOTE</span>');
 
       // Convert newlines to breaks
       html = html.replace(/\n/g, '<br>');
 
       return html;
+    }
+
+    function copyCommand(btn, cmd) {
+      navigator.clipboard.writeText(cmd).then(() => {
+        btn.textContent = '✓';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = 'copy';
+          btn.classList.remove('copied');
+        }, 1500);
+      });
     }
   </script>
 </body>

@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import * as vscode from 'vscode';
 
 let client: Anthropic | null = null;
+let currentStreamId = 0;
 
 function getClient(): Anthropic {
   const config = vscode.workspace.getConfiguration('boop');
@@ -22,6 +23,10 @@ export function resetClient(): void {
   client = null;
 }
 
+export function cancelCurrentStream(): void {
+  currentStreamId++;
+}
+
 export async function streamCompletion(
   systemPrompt: string,
   userPrompt: string,
@@ -29,6 +34,8 @@ export async function streamCompletion(
   onDone: () => void,
   onError: (error: string) => void
 ): Promise<void> {
+  const myStreamId = ++currentStreamId;
+
   try {
     const anthropic = getClient();
     const config = vscode.workspace.getConfiguration('boop');
@@ -36,25 +43,29 @@ export async function streamCompletion(
 
     const stream = anthropic.messages.stream({
       model,
-      max_tokens: 600,
+      max_tokens: 1024,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
     });
 
     stream.on('text', (text) => {
+      if (myStreamId !== currentStreamId) return;
       onChunk(text);
     });
 
     stream.on('end', () => {
+      if (myStreamId !== currentStreamId) return;
       onDone();
     });
 
     stream.on('error', (error) => {
+      if (myStreamId !== currentStreamId) return;
       onError(error.message || 'Stream error');
     });
 
     await stream.finalMessage();
   } catch (error: any) {
+    if (myStreamId !== currentStreamId) return;
     onError(error.message || 'Failed to connect to Claude API');
   }
 }

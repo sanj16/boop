@@ -3010,154 +3010,6 @@ var require_graphology_cjs = __commonJS({
   }
 });
 
-// src/git.ts
-var git_exports = {};
-__export(git_exports, {
-  debugGit: () => debugGit,
-  getGitDiffForFile: () => getGitDiffForFile,
-  getGitLogForFile: () => getGitLogForFile,
-  getLastEditInfo: () => getLastEditInfo
-});
-async function resolveGitBinary() {
-  if (gitBinaryPath) return gitBinaryPath;
-  const gitExtension = vscode3.extensions.getExtension("vscode.git");
-  if (gitExtension) {
-    if (!gitExtension.isActive) {
-      await gitExtension.activate();
-    }
-    try {
-      const api = gitExtension.exports.getAPI(1);
-      if (api?.git?.path) {
-        gitBinaryPath = api.git.path;
-        return gitBinaryPath;
-      }
-    } catch {
-    }
-  }
-  const configured = vscode3.workspace.getConfiguration("git").get("path");
-  if (configured) {
-    gitBinaryPath = configured;
-    return gitBinaryPath;
-  }
-  gitBinaryPath = "git";
-  return gitBinaryPath;
-}
-function getWorkingDir(filePath) {
-  const folder = vscode3.workspace.workspaceFolders?.[0];
-  return folder?.uri.fsPath || path3.dirname(filePath);
-}
-function getEnv() {
-  const env = { ...process.env };
-  if (process.platform === "win32") {
-    env.PATH = `${env.PATH || ""};C:\\Program Files\\Git\\cmd;C:\\Program Files (x86)\\Git\\cmd`;
-  } else {
-    env.PATH = `${env.PATH || ""}:/usr/bin:/usr/local/bin:/opt/homebrew/bin`;
-  }
-  return env;
-}
-function execGit(git, args, cwd) {
-  return (0, import_child_process.execFileSync)(git, args, {
-    cwd,
-    encoding: "utf-8",
-    timeout: 5e3,
-    env: getEnv()
-  }).trim();
-}
-async function getRepoRoot(filePath) {
-  const fileDir = path3.dirname(filePath);
-  const git = await resolveGitBinary();
-  try {
-    return execGit(git, ["rev-parse", "--show-toplevel"], fileDir);
-  } catch {
-    return getWorkingDir(filePath);
-  }
-}
-async function getGitDiffForFile(filePath) {
-  const git = await resolveGitBinary();
-  const repoRoot = await getRepoRoot(filePath);
-  const relativePath = path3.relative(repoRoot, filePath);
-  try {
-    const unstaged = execGit(git, ["diff", "--", relativePath], repoRoot);
-    const staged = execGit(git, ["diff", "--cached", "--", relativePath], repoRoot);
-    if (staged && unstaged) return `${unstaged}
-${staged}`;
-    if (staged) return staged;
-    return unstaged;
-  } catch (e2) {
-    console.error("[boop] git diff failed:", e2.message);
-    return "";
-  }
-}
-async function getGitLogForFile(filePath, maxEntries = 5) {
-  const git = await resolveGitBinary();
-  const repoRoot = await getRepoRoot(filePath);
-  const relativePath = path3.relative(repoRoot, filePath);
-  try {
-    return execGit(git, ["log", `--format=%ar | %s`, `-${maxEntries}`, "--", relativePath], repoRoot);
-  } catch {
-    return "";
-  }
-}
-async function getLastEditInfo(filePath) {
-  const git = await resolveGitBinary();
-  const repoRoot = await getRepoRoot(filePath);
-  const relativePath = path3.relative(repoRoot, filePath);
-  try {
-    return execGit(git, ["log", "--format=%h %ar %an", "-1", "--", relativePath], repoRoot);
-  } catch {
-    return "";
-  }
-}
-async function debugGit(filePath) {
-  const lines = [];
-  const gitExtension = vscode3.extensions.getExtension("vscode.git");
-  lines.push(`git ext found: ${!!gitExtension}`);
-  lines.push(`git ext active: ${gitExtension?.isActive}`);
-  let git = "git";
-  try {
-    git = await resolveGitBinary();
-    lines.push(`resolved binary: ${git}`);
-  } catch (e2) {
-    lines.push(`binary resolve FAILED: ${e2.message}`);
-  }
-  const cwd = getWorkingDir(filePath);
-  lines.push(`workingDir: ${cwd}`);
-  lines.push(`filePath: ${filePath}`);
-  try {
-    const root = execGit(git, ["rev-parse", "--show-toplevel"], cwd);
-    lines.push(`repoRoot: ${root}`);
-    const rel = path3.relative(root, filePath);
-    lines.push(`relativePath: ${rel}`);
-    try {
-      const diff = execGit(git, ["diff", "--", rel], root);
-      lines.push(`diff length: ${diff.length}`);
-      lines.push(`diff preview: ${diff.substring(0, 100)}`);
-    } catch (e2) {
-      lines.push(`diff FAILED: ${e2.message}`);
-    }
-    try {
-      const log = execGit(git, ["log", "--format=%ar | %s", "-3", "--", rel], root);
-      lines.push(`log: ${log.substring(0, 150)}`);
-    } catch (e2) {
-      lines.push(`log FAILED: ${e2.message}`);
-    }
-  } catch (e2) {
-    lines.push(`rev-parse FAILED: ${e2.message}`);
-  }
-  lines.push(`PATH: ${(process.env.PATH || "").substring(0, 200)}`);
-  return lines.join("\n");
-}
-var import_child_process, vscode3, path3, gitBinaryPath;
-var init_git = __esm({
-  "src/git.ts"() {
-    "use strict";
-    import_child_process = require("child_process");
-    vscode3 = __toESM(require("vscode"));
-    path3 = __toESM(require("path"));
-    gitBinaryPath = "";
-  }
-});
-
 // node_modules/webidl-conversions/lib/index.js
 var require_lib = __commonJS({
   "node_modules/webidl-conversions/lib/index.js"(exports2, module2) {
@@ -3890,14 +3742,14 @@ var require_url_state_machine = __commonJS({
       return url.replace(/\u0009|\u000A|\u000D/g, "");
     }
     function shortenPath(url) {
-      const path6 = url.path;
-      if (path6.length === 0) {
+      const path7 = url.path;
+      if (path7.length === 0) {
         return;
       }
-      if (url.scheme === "file" && path6.length === 1 && isNormalizedWindowsDriveLetter(path6[0])) {
+      if (url.scheme === "file" && path7.length === 1 && isNormalizedWindowsDriveLetter(path7[0])) {
         return;
       }
-      path6.pop();
+      path7.pop();
     }
     function includesCredentials(url) {
       return url.username !== "" || url.password !== "";
@@ -9476,14 +9328,14 @@ __export(fileFromPath_exports, {
   fileFromPathSync: () => fileFromPathSync,
   isFile: () => isFile
 });
-function createFileFromPath(path6, { mtimeMs, size }, filenameOrOptions, options = {}) {
+function createFileFromPath(path7, { mtimeMs, size }, filenameOrOptions, options = {}) {
   let filename;
   if (isPlainObject_default2(filenameOrOptions)) {
     [options, filename] = [filenameOrOptions, void 0];
   } else {
     filename = filenameOrOptions;
   }
-  const file = new FileFromPath({ path: path6, size, lastModified: mtimeMs });
+  const file = new FileFromPath({ path: path7, size, lastModified: mtimeMs });
   if (!filename) {
     filename = file.name;
   }
@@ -9492,13 +9344,13 @@ function createFileFromPath(path6, { mtimeMs, size }, filenameOrOptions, options
     lastModified: file.lastModified
   });
 }
-function fileFromPathSync(path6, filenameOrOptions, options = {}) {
-  const stats = (0, import_fs.statSync)(path6);
-  return createFileFromPath(path6, stats, filenameOrOptions, options);
+function fileFromPathSync(path7, filenameOrOptions, options = {}) {
+  const stats = (0, import_fs.statSync)(path7);
+  return createFileFromPath(path7, stats, filenameOrOptions, options);
 }
-async function fileFromPath2(path6, filenameOrOptions, options) {
-  const stats = await import_fs.promises.stat(path6);
-  return createFileFromPath(path6, stats, filenameOrOptions, options);
+async function fileFromPath2(path7, filenameOrOptions, options) {
+  const stats = await import_fs.promises.stat(path7);
+  return createFileFromPath(path7, stats, filenameOrOptions, options);
 }
 var import_fs, import_path, import_node_domexception, __classPrivateFieldSet4, __classPrivateFieldGet5, _FileFromPath_path, _FileFromPath_start, MESSAGE, FileFromPath;
 var init_fileFromPath = __esm({
@@ -9565,7 +9417,7 @@ __export(extension_exports, {
   deactivate: () => deactivate
 });
 module.exports = __toCommonJS(extension_exports);
-var vscode5 = __toESM(require("vscode"));
+var vscode6 = __toESM(require("vscode"));
 
 // src/panel.ts
 var vscode = __toESM(require("vscode"));
@@ -9574,7 +9426,11 @@ var fs = __toESM(require("fs"));
 var BoopPanel = class {
   constructor(context) {
     this.panel = null;
+    this.disposeCallbacks = [];
     this.context = context;
+  }
+  onDispose(callback) {
+    this.disposeCallbacks.push(callback);
   }
   get isVisible() {
     return this.panel !== null;
@@ -9607,12 +9463,14 @@ var BoopPanel = class {
     );
     this.panel.onDidDispose(() => {
       this.panel = null;
+      this.disposeCallbacks.forEach((cb) => cb());
     });
   }
   dispose() {
     if (this.panel) {
       this.panel.dispose();
       this.panel = null;
+      this.disposeCallbacks.forEach((cb) => cb());
     }
   }
   toggle() {
@@ -9627,9 +9485,9 @@ var BoopPanel = class {
       this.panel.webview.postMessage(message);
     }
   }
-  startStream(fileName) {
+  startStream(fileName, metadata) {
     this.show();
-    this.sendMessage({ type: "startStream", fileName });
+    this.sendMessage({ type: "startStream", fileName, metadata });
   }
   streamChunk(text) {
     this.sendMessage({ type: "streamChunk", text });
@@ -9924,19 +9782,323 @@ async function withTimeout(thenable, ms) {
 }
 
 // src/context.ts
+var path5 = __toESM(require("path"));
+
+// src/git.ts
+var import_child_process = require("child_process");
+var vscode3 = __toESM(require("vscode"));
+var path3 = __toESM(require("path"));
+var gitBinaryPath = "";
+async function resolveGitBinary() {
+  if (gitBinaryPath) return gitBinaryPath;
+  const gitExtension = vscode3.extensions.getExtension("vscode.git");
+  if (gitExtension) {
+    if (!gitExtension.isActive) {
+      await gitExtension.activate();
+    }
+    try {
+      const api = gitExtension.exports.getAPI(1);
+      if (api?.git?.path) {
+        gitBinaryPath = api.git.path;
+        return gitBinaryPath;
+      }
+    } catch {
+    }
+  }
+  const configured = vscode3.workspace.getConfiguration("git").get("path");
+  if (configured) {
+    gitBinaryPath = configured;
+    return gitBinaryPath;
+  }
+  gitBinaryPath = "git";
+  return gitBinaryPath;
+}
+function getWorkingDir(filePath) {
+  const folder = vscode3.workspace.workspaceFolders?.[0];
+  return folder?.uri.fsPath || path3.dirname(filePath);
+}
+function getEnv() {
+  const env = { ...process.env };
+  if (process.platform === "win32") {
+    env.PATH = `${env.PATH || ""};C:\\Program Files\\Git\\cmd;C:\\Program Files (x86)\\Git\\cmd`;
+  } else {
+    env.PATH = `${env.PATH || ""}:/usr/bin:/usr/local/bin:/opt/homebrew/bin`;
+  }
+  return env;
+}
+function execGit(git, args, cwd) {
+  return (0, import_child_process.execFileSync)(git, args, {
+    cwd,
+    encoding: "utf-8",
+    timeout: 5e3,
+    env: getEnv()
+  }).trim();
+}
+async function getRepoRoot(filePath) {
+  const fileDir = path3.dirname(filePath);
+  const git = await resolveGitBinary();
+  try {
+    return execGit(git, ["rev-parse", "--show-toplevel"], fileDir);
+  } catch {
+    return getWorkingDir(filePath);
+  }
+}
+async function getGitDiffForFile(filePath) {
+  const git = await resolveGitBinary();
+  const repoRoot = await getRepoRoot(filePath);
+  const relativePath = path3.relative(repoRoot, filePath);
+  try {
+    const unstaged = execGit(git, ["diff", "--", relativePath], repoRoot);
+    const staged = execGit(git, ["diff", "--cached", "--", relativePath], repoRoot);
+    if (staged && unstaged) return `${unstaged}
+${staged}`;
+    if (staged) return staged;
+    return unstaged;
+  } catch (e2) {
+    console.error("[boop] git diff failed:", e2.message);
+    return "";
+  }
+}
+async function getGitLogForFile(filePath, maxEntries = 5) {
+  const git = await resolveGitBinary();
+  const repoRoot = await getRepoRoot(filePath);
+  const relativePath = path3.relative(repoRoot, filePath);
+  try {
+    return execGit(git, ["log", `--format=%ar | %s`, `-${maxEntries}`, "--", relativePath], repoRoot);
+  } catch {
+    return "";
+  }
+}
+async function getLastEditInfo(filePath) {
+  const git = await resolveGitBinary();
+  const repoRoot = await getRepoRoot(filePath);
+  const relativePath = path3.relative(repoRoot, filePath);
+  try {
+    return execGit(git, ["log", "--format=%h %ar %an", "-1", "--", relativePath], repoRoot);
+  } catch {
+    return "";
+  }
+}
+async function getHotFileInfo(filePath) {
+  const git = await resolveGitBinary();
+  const repoRoot = await getRepoRoot(filePath);
+  const relativePath = path3.relative(repoRoot, filePath);
+  let commits2Weeks = 0;
+  let uniqueAuthors = 0;
+  try {
+    const log = execGit(git, ["log", "--since=2 weeks ago", "--format=%an", "--", relativePath], repoRoot);
+    if (log) {
+      const lines = log.split("\n").filter(Boolean);
+      commits2Weeks = lines.length;
+      uniqueAuthors = new Set(lines).size;
+    }
+  } catch {
+  }
+  let level = "stable";
+  if (commits2Weeks >= 8 || uniqueAuthors >= 3) {
+    level = "hot";
+  } else if (commits2Weeks >= 3 || uniqueAuthors >= 2) {
+    level = "active";
+  }
+  return { commits2Weeks, uniqueAuthors, level };
+}
+async function getFileOwners(filePath, maxOwners = 3) {
+  const git = await resolveGitBinary();
+  const repoRoot = await getRepoRoot(filePath);
+  const relativePath = path3.relative(repoRoot, filePath);
+  try {
+    const output = execGit(git, ["shortlog", "-sn", "--no-merges", "HEAD", "--", relativePath], repoRoot);
+    if (!output) return [];
+    return output.split("\n").filter(Boolean).slice(0, maxOwners).map((line) => {
+      const match = line.trim().match(/^(\d+)\s+(.+)$/);
+      if (!match) return { name: "unknown", commits: 0 };
+      return { name: match[2].trim(), commits: parseInt(match[1], 10) };
+    });
+  } catch {
+    return [];
+  }
+}
+
+// src/entrypoint.ts
+var vscode4 = __toESM(require("vscode"));
 var path4 = __toESM(require("path"));
-init_git();
+var fs3 = __toESM(require("fs"));
+async function detectEntrypoint() {
+  const workspaceFolder = vscode4.workspace.workspaceFolders?.[0];
+  if (!workspaceFolder) return null;
+  const root = workspaceFolder.uri.fsPath;
+  const boopConfig = readBoopConfig(root);
+  if (boopConfig) return boopConfig;
+  return autoDetect(root);
+}
+function readBoopConfig(root) {
+  const configPath = path4.join(root, ".boop.json");
+  try {
+    if (fs3.existsSync(configPath)) {
+      const raw = fs3.readFileSync(configPath, "utf-8");
+      const config = JSON.parse(raw);
+      if (config.mainFile && config.commands) {
+        return {
+          mainFile: config.mainFile,
+          commands: config.commands
+        };
+      }
+    }
+  } catch {
+  }
+  return null;
+}
+function autoDetect(root) {
+  const pkgResult = tryPackageJson(root);
+  if (pkgResult) return pkgResult;
+  const pyResult = tryPython(root);
+  if (pyResult) return pyResult;
+  const cargoResult = tryCargo(root);
+  if (cargoResult) return cargoResult;
+  const goResult = tryGo(root);
+  if (goResult) return goResult;
+  const makeResult = tryMakefile(root);
+  if (makeResult) return makeResult;
+  const dockerResult = tryDockerfile(root);
+  if (dockerResult) return dockerResult;
+  return null;
+}
+function tryPackageJson(root) {
+  const pkgPath = path4.join(root, "package.json");
+  try {
+    if (!fs3.existsSync(pkgPath)) return null;
+    const pkg = JSON.parse(fs3.readFileSync(pkgPath, "utf-8"));
+    const mainFile = pkg.main || "index.js";
+    const commands3 = [];
+    if (pkg.scripts) {
+      if (pkg.scripts.dev) commands3.push({ label: "Dev", command: `npm run dev` });
+      if (pkg.scripts.start) commands3.push({ label: "Start", command: `npm start` });
+      if (pkg.scripts.build) commands3.push({ label: "Build", command: `npm run build` });
+      if (pkg.scripts.test) commands3.push({ label: "Test", command: `npm test` });
+      if (pkg.scripts.lint) commands3.push({ label: "Lint", command: `npm run lint` });
+    }
+    if (commands3.length === 0 && mainFile) {
+      commands3.push({ label: "Run", command: `node ${mainFile}` });
+    }
+    return { mainFile, commands: commands3 };
+  } catch {
+    return null;
+  }
+}
+function tryPython(root) {
+  const pyprojectPath = path4.join(root, "pyproject.toml");
+  if (fs3.existsSync(pyprojectPath)) {
+    const content = fs3.readFileSync(pyprojectPath, "utf-8");
+    const commands3 = [];
+    const scriptMatch = content.match(/\[tool\.poetry\.scripts\]\s*\n([\s\S]*?)(?:\n\[|$)/);
+    if (scriptMatch) {
+      commands3.push({ label: "Run", command: "poetry run start" });
+    }
+    commands3.push({ label: "Install", command: "pip install -e ." });
+    commands3.push({ label: "Test", command: "pytest" });
+    const mainFile = fs3.existsSync(path4.join(root, "main.py")) ? "main.py" : fs3.existsSync(path4.join(root, "app.py")) ? "app.py" : "main.py";
+    commands3.unshift({ label: "Run", command: `python ${mainFile}` });
+    return { mainFile, commands: commands3 };
+  }
+  if (fs3.existsSync(path4.join(root, "main.py"))) {
+    return {
+      mainFile: "main.py",
+      commands: [
+        { label: "Run", command: "python main.py" },
+        { label: "Test", command: "pytest" }
+      ]
+    };
+  }
+  if (fs3.existsSync(path4.join(root, "app.py"))) {
+    return {
+      mainFile: "app.py",
+      commands: [
+        { label: "Run", command: "python app.py" },
+        { label: "Flask", command: "flask run" }
+      ]
+    };
+  }
+  if (fs3.existsSync(path4.join(root, "manage.py"))) {
+    return {
+      mainFile: "manage.py",
+      commands: [
+        { label: "Run", command: "python manage.py runserver" },
+        { label: "Migrate", command: "python manage.py migrate" },
+        { label: "Test", command: "python manage.py test" }
+      ]
+    };
+  }
+  return null;
+}
+function tryCargo(root) {
+  const cargoPath = path4.join(root, "Cargo.toml");
+  if (!fs3.existsSync(cargoPath)) return null;
+  return {
+    mainFile: "src/main.rs",
+    commands: [
+      { label: "Run", command: "cargo run" },
+      { label: "Build", command: "cargo build" },
+      { label: "Test", command: "cargo test" }
+    ]
+  };
+}
+function tryGo(root) {
+  const goModPath = path4.join(root, "go.mod");
+  if (!fs3.existsSync(goModPath)) return null;
+  const mainFile = fs3.existsSync(path4.join(root, "cmd", "main.go")) ? "cmd/main.go" : "main.go";
+  return {
+    mainFile,
+    commands: [
+      { label: "Run", command: "go run ." },
+      { label: "Build", command: "go build ." },
+      { label: "Test", command: "go test ./..." }
+    ]
+  };
+}
+function tryMakefile(root) {
+  const makePath = path4.join(root, "Makefile");
+  if (!fs3.existsSync(makePath)) return null;
+  const content = fs3.readFileSync(makePath, "utf-8");
+  const commands3 = [];
+  const targets = content.match(/^([a-zA-Z_-]+):/gm);
+  if (targets) {
+    for (const target of targets.slice(0, 5)) {
+      const name = target.replace(":", "");
+      commands3.push({ label: name, command: `make ${name}` });
+    }
+  }
+  return commands3.length > 0 ? { mainFile: "Makefile", commands: commands3 } : null;
+}
+function tryDockerfile(root) {
+  const dockerPath = path4.join(root, "Dockerfile");
+  if (!fs3.existsSync(dockerPath)) return null;
+  const commands3 = [
+    { label: "Build", command: "docker build -t app ." },
+    { label: "Run", command: "docker run app" }
+  ];
+  if (fs3.existsSync(path4.join(root, "docker-compose.yml")) || fs3.existsSync(path4.join(root, "compose.yml"))) {
+    commands3.unshift({ label: "Up", command: "docker compose up" });
+  }
+  return { mainFile: "Dockerfile", commands: commands3 };
+}
+
+// src/context.ts
 async function gatherFileContext(document) {
   const filePath = document.uri.fsPath;
-  const fileName = path4.basename(filePath);
+  const fileName = path5.basename(filePath);
   const fileContent = document.getText().split("\n").slice(0, 200).join("\n");
   const language = document.languageId;
   const dependencies = getDependencies(filePath);
   const dependents = getDependents(filePath);
   const totalCallSites = getTotalCallSites(filePath);
   const symbols = getSymbols(filePath);
-  const gitLog = await getGitLogForFile(filePath);
-  const gitBlame = await getLastEditInfo(filePath);
+  const [gitLog, gitBlame, hotFile, owners, entrypoint] = await Promise.all([
+    getGitLogForFile(filePath),
+    getLastEditInfo(filePath),
+    getHotFileInfo(filePath),
+    getFileOwners(filePath),
+    detectEntrypoint()
+  ]);
   return {
     fileName,
     fileContent,
@@ -9946,16 +10108,18 @@ async function gatherFileContext(document) {
     totalCallSites,
     symbols,
     gitLog,
-    gitBlame
+    gitBlame,
+    hotFile,
+    owners,
+    entrypoint
   };
 }
 
 // src/changes.ts
-var path5 = __toESM(require("path"));
-init_git();
+var path6 = __toESM(require("path"));
 async function getChangeContext(document) {
   const filePath = document.uri.fsPath;
-  const fileName = path5.basename(filePath);
+  const fileName = path6.basename(filePath);
   const fileContent = document.getText().split("\n").slice(0, 200).join("\n");
   const diff = await getGitDiffForFile(filePath);
   if (!diff) return null;
@@ -10343,13 +10507,13 @@ var MultipartBody = class {
 // node_modules/@anthropic-ai/sdk/_shims/node-runtime.mjs
 var import_web = require("node:stream/web");
 var fileFromPathWarned = false;
-async function fileFromPath3(path6, ...args) {
+async function fileFromPath3(path7, ...args) {
   const { fileFromPath: _fileFromPath } = await Promise.resolve().then(() => (init_fileFromPath(), fileFromPath_exports));
   if (!fileFromPathWarned) {
-    console.warn(`fileFromPath is deprecated; use fs.createReadStream(${JSON.stringify(path6)}) instead`);
+    console.warn(`fileFromPath is deprecated; use fs.createReadStream(${JSON.stringify(path7)}) instead`);
     fileFromPathWarned = true;
   }
-  return await _fileFromPath(path6, ...args);
+  return await _fileFromPath(path7, ...args);
 }
 var defaultHttpAgent = new import_agentkeepalive.default({ keepAlive: true, timeout: 5 * 60 * 1e3 });
 var defaultHttpsAgent = new import_agentkeepalive.default.HttpsAgent({ keepAlive: true, timeout: 5 * 60 * 1e3 });
@@ -11073,29 +11237,29 @@ var APIClient = class {
   defaultIdempotencyKey() {
     return `stainless-node-retry-${uuid4()}`;
   }
-  get(path6, opts) {
-    return this.methodRequest("get", path6, opts);
+  get(path7, opts) {
+    return this.methodRequest("get", path7, opts);
   }
-  post(path6, opts) {
-    return this.methodRequest("post", path6, opts);
+  post(path7, opts) {
+    return this.methodRequest("post", path7, opts);
   }
-  patch(path6, opts) {
-    return this.methodRequest("patch", path6, opts);
+  patch(path7, opts) {
+    return this.methodRequest("patch", path7, opts);
   }
-  put(path6, opts) {
-    return this.methodRequest("put", path6, opts);
+  put(path7, opts) {
+    return this.methodRequest("put", path7, opts);
   }
-  delete(path6, opts) {
-    return this.methodRequest("delete", path6, opts);
+  delete(path7, opts) {
+    return this.methodRequest("delete", path7, opts);
   }
-  methodRequest(method, path6, opts) {
+  methodRequest(method, path7, opts) {
     return this.request(Promise.resolve(opts).then(async (opts2) => {
       const body = opts2 && isBlobLike(opts2?.body) ? new DataView(await opts2.body.arrayBuffer()) : opts2?.body instanceof DataView ? opts2.body : opts2?.body instanceof ArrayBuffer ? new DataView(opts2.body) : opts2 && ArrayBuffer.isView(opts2?.body) ? new DataView(opts2.body.buffer) : opts2?.body;
-      return { method, path: path6, ...opts2, body };
+      return { method, path: path7, ...opts2, body };
     }));
   }
-  getAPIList(path6, Page2, opts) {
-    return this.requestAPIList(Page2, { method: "get", path: path6, ...opts });
+  getAPIList(path7, Page2, opts) {
+    return this.requestAPIList(Page2, { method: "get", path: path7, ...opts });
   }
   calculateContentLength(body) {
     if (typeof body === "string") {
@@ -11114,10 +11278,10 @@ var APIClient = class {
   }
   buildRequest(options, { retryCount = 0 } = {}) {
     options = { ...options };
-    const { method, path: path6, query, headers = {} } = options;
+    const { method, path: path7, query, headers = {} } = options;
     const body = ArrayBuffer.isView(options.body) || options.__binaryRequest && typeof options.body === "string" ? options.body : isMultipartBody(options.body) ? options.body.body : options.body ? JSON.stringify(options.body, null, 2) : null;
     const contentLength = this.calculateContentLength(body);
-    const url = this.buildURL(path6, query);
+    const url = this.buildURL(path7, query);
     if ("timeout" in options)
       validatePositiveInteger("timeout", options.timeout);
     options.timeout = options.timeout ?? this.timeout;
@@ -11241,8 +11405,8 @@ var APIClient = class {
     const request = this.makeRequest(options, null);
     return new PagePromise(this, request, Page2);
   }
-  buildURL(path6, query) {
-    const url = isAbsoluteURL(path6) ? new URL(path6) : new URL(this.baseURL + (this.baseURL.endsWith("/") && path6.startsWith("/") ? path6.slice(1) : path6));
+  buildURL(path7, query) {
+    const url = isAbsoluteURL(path7) ? new URL(path7) : new URL(this.baseURL + (this.baseURL.endsWith("/") && path7.startsWith("/") ? path7.slice(1) : path7));
     const defaultQuery = this.defaultQuery();
     if (!isEmptyObj(defaultQuery)) {
       query = { ...defaultQuery, ...query };
@@ -13565,10 +13729,11 @@ var { HUMAN_PROMPT, AI_PROMPT } = Anthropic;
 var sdk_default = Anthropic;
 
 // src/ai.ts
-var vscode4 = __toESM(require("vscode"));
+var vscode5 = __toESM(require("vscode"));
 var client = null;
+var currentStreamId = 0;
 function getClient() {
-  const config = vscode4.workspace.getConfiguration("boop");
+  const config = vscode5.workspace.getConfiguration("boop");
   const apiKey = config.get("anthropicApiKey") || process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error('No API key found. Either:\n1. Set ANTHROPIC_API_KEY env variable, or\n2. Settings \u2192 search "boop" \u2192 paste key in boop.anthropicApiKey');
@@ -13581,28 +13746,36 @@ function getClient() {
 function resetClient() {
   client = null;
 }
+function cancelCurrentStream() {
+  currentStreamId++;
+}
 async function streamCompletion(systemPrompt, userPrompt, onChunk, onDone, onError) {
+  const myStreamId = ++currentStreamId;
   try {
     const anthropic = getClient();
-    const config = vscode4.workspace.getConfiguration("boop");
+    const config = vscode5.workspace.getConfiguration("boop");
     const model = config.get("model") || "claude-sonnet-4-6";
     const stream = anthropic.messages.stream({
       model,
-      max_tokens: 600,
+      max_tokens: 1024,
       system: systemPrompt,
       messages: [{ role: "user", content: userPrompt }]
     });
     stream.on("text", (text) => {
+      if (myStreamId !== currentStreamId) return;
       onChunk(text);
     });
     stream.on("end", () => {
+      if (myStreamId !== currentStreamId) return;
       onDone();
     });
     stream.on("error", (error) => {
+      if (myStreamId !== currentStreamId) return;
       onError(error.message || "Stream error");
     });
     await stream.finalMessage();
   } catch (error) {
+    if (myStreamId !== currentStreamId) return;
     onError(error.message || "Failed to connect to Claude API");
   }
 }
@@ -13616,9 +13789,15 @@ Rules:
 - Keep "Purpose" to ONE sentence. No filler like "This file..." \u2014 start with a verb.
 - "Watch out" section: real warnings based on coupling, history, and complexity. Be specific.
 - Write like terse release notes, not documentation.
-- If a file has caused issues (outages, many PRs, high coupling), call it out clearly.`;
+- If a file has caused issues (outages, many PRs, high coupling), call it out clearly.
+- You MUST include ALL four sections: Purpose, Architecture position, Recent changes, Watch out.`;
 function buildBriefPrompt(ctx) {
   const dependentsList = ctx.dependents.length > 0 ? ctx.dependents.map((d2) => `${d2.file} (${d2.count} refs)`).join(", ") : "none detected";
+  const hotLabel = ctx.hotFile.level === "hot" ? "\u{1F534} Hot" : ctx.hotFile.level === "active" ? "\u{1F7E1} Active" : "\u{1F7E2} Stable";
+  const hotDetail = `${hotLabel} \u2014 ${ctx.hotFile.commits2Weeks} commits in 2 weeks, ${ctx.hotFile.uniqueAuthors} authors`;
+  const ownersList = ctx.owners.length > 0 ? ctx.owners.map((o2) => `${o2.name} (${o2.commits} commits)`).join(", ") : "unknown";
+  const entrypointInfo = ctx.entrypoint ? `Entry point: ${ctx.entrypoint.mainFile}
+Run commands: ${ctx.entrypoint.commands.map((c2) => `${c2.label}: ${c2.command}`).join(", ")}` : "Entry point: not detected";
   return `Generate a brief for this file.
 
 File: ${ctx.fileName}
@@ -13638,8 +13817,11 @@ Recent git history:
 ${ctx.gitLog || "No git history available"}
 
 Last edit: ${ctx.gitBlame || "unknown"}
+File stability: ${hotDetail}
+Experts: ${ownersList}
+${entrypointInfo}
 
-Respond in EXACTLY this format:
+Respond in EXACTLY this format (include ALL sections, no extras):
 
 ## Purpose
 <one sentence starting with a verb>
@@ -13695,68 +13877,87 @@ Affects: <list of files that may be impacted, with reasoning>
 
 // src/extension.ts
 var boopPanel;
+var cache = /* @__PURE__ */ new Map();
+function getCacheKey(doc) {
+  return doc.uri.fsPath;
+}
+function clearCache(filePath) {
+  if (filePath) {
+    cache.delete(filePath);
+  } else {
+    cache.clear();
+  }
+}
 function activate(context) {
   initGraph(context);
   boopPanel = new BoopPanel(context);
-  const infoButton = vscode5.window.createStatusBarItem(vscode5.StatusBarAlignment.Right, 100);
+  boopPanel.onDispose(() => {
+    clearCache();
+  });
+  const infoButton = vscode6.window.createStatusBarItem(vscode6.StatusBarAlignment.Right, 100);
   infoButton.text = "\u{1F436} \u2139\uFE0F";
   infoButton.tooltip = "Show file brief \u2014 what this file does, who uses it, watch-outs";
   infoButton.command = "boop.showBrief";
   infoButton.show();
-  const refreshButton = vscode5.window.createStatusBarItem(vscode5.StatusBarAlignment.Right, 99);
+  const refreshButton = vscode6.window.createStatusBarItem(vscode6.StatusBarAlignment.Right, 99);
   refreshButton.text = "\u{1F436}\u21BB";
   refreshButton.tooltip = "Review uncommitted changes \u2014 impact analysis";
   refreshButton.command = "boop.reviewChanges";
   refreshButton.show();
-  const showBriefCmd = vscode5.commands.registerCommand("boop.showBrief", () => {
-    const editor = vscode5.window.activeTextEditor;
-    if (!editor) {
-      vscode5.window.showInformationMessage("boop: Open a file first");
+  let lastMode = null;
+  let lastDocument = null;
+  const showBriefCmd = vscode6.commands.registerCommand("boop.showBrief", () => {
+    const editor = vscode6.window.activeTextEditor;
+    const doc = editor?.document || lastDocument;
+    if (!doc) {
+      vscode6.window.showInformationMessage("boop: Open a file first");
       return;
     }
-    if (boopPanel.isVisible) {
+    if (boopPanel.isVisible && lastMode === "brief") {
       boopPanel.dispose();
+      lastMode = null;
     } else {
-      runBrief(editor.document);
+      cancelCurrentStream();
+      lastMode = "brief";
+      lastDocument = doc;
+      runBrief(doc);
     }
   });
-  const reviewChangesCmd = vscode5.commands.registerCommand("boop.reviewChanges", () => {
-    const editor = vscode5.window.activeTextEditor;
-    if (!editor) {
-      vscode5.window.showInformationMessage("boop: Open a file first");
+  const reviewChangesCmd = vscode6.commands.registerCommand("boop.reviewChanges", () => {
+    const editor = vscode6.window.activeTextEditor;
+    const doc = editor?.document || lastDocument;
+    if (!doc) {
+      vscode6.window.showInformationMessage("boop: Open a file first");
       return;
     }
-    runChangeReview(editor.document);
-  });
-  const debugGitCmd = vscode5.commands.registerCommand("boop.debugGit", async () => {
-    const editor = vscode5.window.activeTextEditor;
-    if (!editor) {
-      vscode5.window.showInformationMessage("boop: Open a file first");
-      return;
+    if (boopPanel.isVisible && lastMode === "changes") {
+      boopPanel.dispose();
+      lastMode = null;
+    } else {
+      cancelCurrentStream();
+      lastMode = "changes";
+      lastDocument = doc;
+      runChangeReview(doc);
     }
-    const filePath = editor.document.uri.fsPath;
-    const { debugGit: debugGit2 } = await Promise.resolve().then(() => (init_git(), git_exports));
-    const info = await debugGit2(filePath);
-    vscode5.window.showInformationMessage(info, { modal: true });
   });
-  const configChange = vscode5.workspace.onDidChangeConfiguration((e2) => {
+  const configChange = vscode6.workspace.onDidChangeConfiguration((e2) => {
     if (e2.affectsConfiguration("boop.anthropicApiKey")) {
       resetClient();
     }
   });
-  const fileSave = vscode5.workspace.onDidSaveTextDocument(async (document) => {
+  const fileSave = vscode6.workspace.onDidSaveTextDocument(async (document) => {
     await indexFile(document);
   });
-  const fileOpen = vscode5.window.onDidChangeActiveTextEditor(async (editor) => {
+  const fileOpen = vscode6.window.onDidChangeActiveTextEditor(async (editor) => {
     if (!editor) return;
     await indexFile(editor.document);
-    const config = vscode5.workspace.getConfiguration("boop");
+    const config = vscode6.workspace.getConfiguration("boop");
     if (config.get("autoShow")) {
       runBrief(editor.document);
     }
   });
-  vscode5.window.withProgress(
-    { location: vscode5.ProgressLocation.Window, title: "boop: indexing workspace" },
+  vscode6.window.withProgress(
+    { location: vscode6.ProgressLocation.Window, title: "boop: indexing workspace" },
     async (progress) => {
       await indexWorkspace(progress);
     }
@@ -13764,7 +13965,6 @@ function activate(context) {
   context.subscriptions.push(
     showBriefCmd,
     reviewChangesCmd,
-    debugGitCmd,
     configChange,
     fileSave,
     fileOpen,
@@ -13779,17 +13979,41 @@ function activate(context) {
   });
 }
 async function runBrief(document) {
+  const key = getCacheKey(document);
+  const cached = cache.get(key);
+  if (cached?.brief) {
+    const fileName2 = document.fileName.split("/").pop() || "unknown";
+    boopPanel.show();
+    boopPanel.startStream(fileName2);
+    boopPanel.streamChunk(cached.brief);
+    boopPanel.endStream();
+    return;
+  }
   const fileName = document.fileName.split("/").pop() || "unknown";
   boopPanel.showLoading(fileName, "Gathering context...");
   try {
     const ctx = await gatherFileContext(document);
     const userPrompt = buildBriefPrompt(ctx);
-    boopPanel.startStream(ctx.fileName);
+    boopPanel.startStream(ctx.fileName, {
+      commands: ctx.entrypoint?.commands,
+      mainFile: ctx.entrypoint?.mainFile,
+      hotFile: ctx.hotFile,
+      owners: ctx.owners
+    });
+    let fullText = "";
     await streamCompletion(
       BRIEF_SYSTEM_PROMPT,
       userPrompt,
-      (chunk) => boopPanel.streamChunk(chunk),
-      () => boopPanel.endStream(),
+      (chunk) => {
+        fullText += chunk;
+        boopPanel.streamChunk(chunk);
+      },
+      () => {
+        boopPanel.endStream();
+        const entry = cache.get(key) || {};
+        entry.brief = fullText;
+        cache.set(key, entry);
+      },
       (error) => boopPanel.showError(error)
     );
   } catch (error) {
@@ -13797,6 +14021,16 @@ async function runBrief(document) {
   }
 }
 async function runChangeReview(document) {
+  const key = getCacheKey(document);
+  const cached = cache.get(key);
+  if (cached?.changes) {
+    const fileName2 = document.fileName.split("/").pop() || "unknown";
+    boopPanel.show();
+    boopPanel.startStream(`${fileName2} \u2014 impact`);
+    boopPanel.streamChunk(cached.changes);
+    boopPanel.endStream();
+    return;
+  }
   const fileName = document.fileName.split("/").pop() || "unknown";
   boopPanel.showLoading(fileName, "Checking changes...");
   const ctx = await getChangeContext(document);
@@ -13810,11 +14044,20 @@ async function runChangeReview(document) {
   try {
     const userPrompt = buildChangesPrompt(ctx);
     boopPanel.startStream(`${ctx.fileName} \u2014 impact`);
+    let fullText = "";
     await streamCompletion(
       CHANGES_SYSTEM_PROMPT,
       userPrompt,
-      (chunk) => boopPanel.streamChunk(chunk),
-      () => boopPanel.endStream(),
+      (chunk) => {
+        fullText += chunk;
+        boopPanel.streamChunk(chunk);
+      },
+      () => {
+        boopPanel.endStream();
+        const entry = cache.get(key) || {};
+        entry.changes = fullText;
+        cache.set(key, entry);
+      },
       (error) => boopPanel.showError(error)
     );
   } catch (error) {

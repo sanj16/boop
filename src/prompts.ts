@@ -9,12 +9,27 @@ Rules:
 - Keep "Purpose" to ONE sentence. No filler like "This file..." — start with a verb.
 - "Watch out" section: real warnings based on coupling, history, and complexity. Be specific.
 - Write like terse release notes, not documentation.
-- If a file has caused issues (outages, many PRs, high coupling), call it out clearly.`;
+- If a file has caused issues (outages, many PRs, high coupling), call it out clearly.
+- You MUST include ALL four sections: Purpose, Architecture position, Recent changes, Watch out.`;
 
 export function buildBriefPrompt(ctx: FileContext): string {
   const dependentsList = ctx.dependents.length > 0
     ? ctx.dependents.map((d) => `${d.file} (${d.count} refs)`).join(', ')
     : 'none detected';
+
+  const hotLabel = ctx.hotFile.level === 'hot' ? '🔴 Hot'
+    : ctx.hotFile.level === 'active' ? '🟡 Active'
+    : '🟢 Stable';
+
+  const hotDetail = `${hotLabel} — ${ctx.hotFile.commits2Weeks} commits in 2 weeks, ${ctx.hotFile.uniqueAuthors} authors`;
+
+  const ownersList = ctx.owners.length > 0
+    ? ctx.owners.map((o) => `${o.name} (${o.commits} commits)`).join(', ')
+    : 'unknown';
+
+  const entrypointInfo = ctx.entrypoint
+    ? `Entry point: ${ctx.entrypoint.mainFile}\nRun commands: ${ctx.entrypoint.commands.map(c => `${c.label}: ${c.command}`).join(', ')}`
+    : 'Entry point: not detected';
 
   return `Generate a brief for this file.
 
@@ -35,8 +50,11 @@ Recent git history:
 ${ctx.gitLog || 'No git history available'}
 
 Last edit: ${ctx.gitBlame || 'unknown'}
+File stability: ${hotDetail}
+Experts: ${ownersList}
+${entrypointInfo}
 
-Respond in EXACTLY this format:
+Respond in EXACTLY this format (include ALL sections, no extras):
 
 ## Purpose
 <one sentence starting with a verb>

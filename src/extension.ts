@@ -4,14 +4,34 @@ import { initGraph, saveToDisk } from './graph';
 import { indexFile, indexWorkspace } from './indexer';
 import { gatherFileContext } from './context';
 import { getChangeContext } from './changes';
-import { streamCompletion, resetClient } from './ai';
+import { streamCompletion, resetClient, cancelCurrentStream } from './ai';
 import { BRIEF_SYSTEM_PROMPT, buildBriefPrompt, CHANGES_SYSTEM_PROMPT, buildChangesPrompt } from './prompts';
 
 let boopPanel: BoopPanel;
 
+// Cache: stores completed results per file
+const cache = new Map<string, { brief?: string; changes?: string }>();
+
+function getCacheKey(doc: vscode.TextDocument): string {
+  return doc.uri.fsPath;
+}
+
+function clearCache(filePath?: string) {
+  if (filePath) {
+    cache.delete(filePath);
+  } else {
+    cache.clear();
+  }
+}
+
 export function activate(context: vscode.ExtensionContext) {
   initGraph(context);
   boopPanel = new BoopPanel(context);
+
+  // Clear cache when panel is fully closed
+  boopPanel.onDispose(() => {
+    clearCache();
+  });
 
   // Status bar buttons (always visible)
   const infoButton = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -26,40 +46,47 @@ export function activate(context: vscode.ExtensionContext) {
   refreshButton.command = 'boop.reviewChanges';
   refreshButton.show();
 
+  let lastMode: 'brief' | 'changes' | null = null;
+  let lastDocument: vscode.TextDocument | null = null;
+
   const showBriefCmd = vscode.commands.registerCommand('boop.showBrief', () => {
     const editor = vscode.window.activeTextEditor;
-    if (!editor) {
+    const doc = editor?.document || lastDocument;
+    if (!doc) {
       vscode.window.showInformationMessage('boop: Open a file first');
       return;
     }
 
-    if (boopPanel.isVisible) {
+    if (boopPanel.isVisible && lastMode === 'brief') {
       boopPanel.dispose();
+      lastMode = null;
     } else {
-      runBrief(editor.document);
+      cancelCurrentStream();
+      lastMode = 'brief';
+      lastDocument = doc;
+      runBrief(doc);
     }
   });
 
   const reviewChangesCmd = vscode.commands.registerCommand('boop.reviewChanges', () => {
     const editor = vscode.window.activeTextEditor;
-    if (!editor) {
+    const doc = editor?.document || lastDocument;
+    if (!doc) {
       vscode.window.showInformationMessage('boop: Open a file first');
       return;
     }
-    runChangeReview(editor.document);
+
+    if (boopPanel.isVisible && lastMode === 'changes') {
+      boopPanel.dispose();
+      lastMode = null;
+    } else {
+      cancelCurrentStream();
+      lastMode = 'changes';
+      lastDocument = doc;
+      runChangeReview(doc);
+    }
   });
 
-  const debugGitCmd = vscode.commands.registerCommand('boop.debugGit', async () => {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      vscode.window.showInformationMessage('boop: Open a file first');
-      return;
-    }
-    const filePath = editor.document.uri.fsPath;
-    const { debugGit } = await import('./git');
-    const info = await debugGit(filePath);
-    vscode.window.showInformationMessage(info, { modal: true });
-  });
 
   const configChange = vscode.workspace.onDidChangeConfiguration((e) => {
     if (e.affectsConfiguration('boop.anthropicApiKey')) {
@@ -91,7 +118,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    showBriefCmd, reviewChangesCmd, debugGitCmd, configChange, fileSave, fileOpen,
+    showBriefCmd, reviewChangesCmd, configChange, fileSave, fileOpen,
     infoButton, refreshButton
   );
 
@@ -104,21 +131,48 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 async function runBrief(document: vscode.TextDocument) {
-  const fileName = document.fileName.split('/').pop() || 'unknown';
+  const key = getCacheKey(document);
+  const cached = cache.get(key);
 
+  // If cached, show instantly
+  if (cached?.brief) {
+    const fileName = document.fileName.split('/').pop() || 'unknown';
+    boopPanel.show();
+    boopPanel.startStream(fileName);
+    boopPanel.streamChunk(cached.brief);
+    boopPanel.endStream();
+    return;
+  }
+
+  const fileName = document.fileName.split('/').pop() || 'unknown';
   boopPanel.showLoading(fileName, 'Gathering context...');
 
   try {
     const ctx = await gatherFileContext(document);
     const userPrompt = buildBriefPrompt(ctx);
 
-    boopPanel.startStream(ctx.fileName);
+    boopPanel.startStream(ctx.fileName, {
+      commands: ctx.entrypoint?.commands,
+      mainFile: ctx.entrypoint?.mainFile,
+      hotFile: ctx.hotFile,
+      owners: ctx.owners,
+    });
+
+    let fullText = '';
 
     await streamCompletion(
       BRIEF_SYSTEM_PROMPT,
       userPrompt,
-      (chunk) => boopPanel.streamChunk(chunk),
-      () => boopPanel.endStream(),
+      (chunk) => {
+        fullText += chunk;
+        boopPanel.streamChunk(chunk);
+      },
+      () => {
+        boopPanel.endStream();
+        const entry = cache.get(key) || {};
+        entry.brief = fullText;
+        cache.set(key, entry);
+      },
       (error) => boopPanel.showError(error)
     );
   } catch (error: any) {
@@ -127,8 +181,20 @@ async function runBrief(document: vscode.TextDocument) {
 }
 
 async function runChangeReview(document: vscode.TextDocument) {
-  const fileName = document.fileName.split('/').pop() || 'unknown';
+  const key = getCacheKey(document);
+  const cached = cache.get(key);
 
+  // If cached, show instantly
+  if (cached?.changes) {
+    const fileName = document.fileName.split('/').pop() || 'unknown';
+    boopPanel.show();
+    boopPanel.startStream(`${fileName} — impact`);
+    boopPanel.streamChunk(cached.changes);
+    boopPanel.endStream();
+    return;
+  }
+
+  const fileName = document.fileName.split('/').pop() || 'unknown';
   boopPanel.showLoading(fileName, 'Checking changes...');
 
   const ctx = await getChangeContext(document);
@@ -146,11 +212,22 @@ async function runChangeReview(document: vscode.TextDocument) {
 
     boopPanel.startStream(`${ctx.fileName} — impact`);
 
+    let fullText = '';
+
     await streamCompletion(
       CHANGES_SYSTEM_PROMPT,
       userPrompt,
-      (chunk) => boopPanel.streamChunk(chunk),
-      () => boopPanel.endStream(),
+      (chunk) => {
+        fullText += chunk;
+        boopPanel.streamChunk(chunk);
+      },
+      () => {
+        boopPanel.endStream();
+        // Cache the completed result
+        const entry = cache.get(key) || {};
+        entry.changes = fullText;
+        cache.set(key, entry);
+      },
       (error) => boopPanel.showError(error)
     );
   } catch (error: any) {

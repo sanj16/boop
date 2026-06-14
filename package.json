@@ -24,10 +24,6 @@
       {
         "command": "boop.reviewChanges",
         "title": "Boop: Review Changes"
-      },
-      {
-        "command": "boop.debugGit",
-        "title": "Boop: Debug Git"
       }
     ],
     "configuration": {

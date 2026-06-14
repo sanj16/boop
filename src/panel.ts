@@ -5,9 +5,14 @@ import * as fs from 'fs';
 export class BoopPanel {
   private panel: vscode.WebviewPanel | null = null;
   private context: vscode.ExtensionContext;
+  private disposeCallbacks: Array<() => void> = [];
 
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
+  }
+
+  onDispose(callback: () => void): void {
+    this.disposeCallbacks.push(callback);
   }
 
   get isVisible(): boolean {
@@ -46,6 +51,7 @@ export class BoopPanel {
 
     this.panel.onDidDispose(() => {
       this.panel = null;
+      this.disposeCallbacks.forEach((cb) => cb());
     });
   }
 
@@ -53,6 +59,7 @@ export class BoopPanel {
     if (this.panel) {
       this.panel.dispose();
       this.panel = null;
+      this.disposeCallbacks.forEach((cb) => cb());
     }
   }
 
@@ -70,9 +77,9 @@ export class BoopPanel {
     }
   }
 
-  startStream(fileName: string): void {
+  startStream(fileName: string, metadata?: { commands?: { label: string; command: string }[]; mainFile?: string; hotFile?: { level: string; commits2Weeks: number; uniqueAuthors: number }; owners?: { name: string; commits: number }[] }): void {
     this.show();
-    this.sendMessage({ type: 'startStream', fileName });
+    this.sendMessage({ type: 'startStream', fileName, metadata });
   }
 
   streamChunk(text: string): void {

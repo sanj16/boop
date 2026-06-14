@@ -112,56 +112,66 @@ export async function getLastEditInfo(filePath: string): Promise<string> {
   }
 }
 
-export async function debugGit(filePath: string): Promise<string> {
-  const lines: string[] = [];
-
-  // 1. Git binary resolution
-  const gitExtension = vscode.extensions.getExtension('vscode.git');
-  lines.push(`git ext found: ${!!gitExtension}`);
-  lines.push(`git ext active: ${gitExtension?.isActive}`);
-
-  let git = 'git';
-  try {
-    git = await resolveGitBinary();
-    lines.push(`resolved binary: ${git}`);
-  } catch (e: any) {
-    lines.push(`binary resolve FAILED: ${e.message}`);
-  }
-
-  // 2. Working dir
-  const cwd = getWorkingDir(filePath);
-  lines.push(`workingDir: ${cwd}`);
-  lines.push(`filePath: ${filePath}`);
-
-  // 3. Try rev-parse
-  try {
-    const root = execGit(git, ['rev-parse', '--show-toplevel'], cwd);
-    lines.push(`repoRoot: ${root}`);
-    const rel = path.relative(root, filePath);
-    lines.push(`relativePath: ${rel}`);
-
-    // 4. Try diff
-    try {
-      const diff = execGit(git, ['diff', '--', rel], root);
-      lines.push(`diff length: ${diff.length}`);
-      lines.push(`diff preview: ${diff.substring(0, 100)}`);
-    } catch (e: any) {
-      lines.push(`diff FAILED: ${e.message}`);
-    }
-
-    // 5. Try log
-    try {
-      const log = execGit(git, ['log', '--format=%ar | %s', '-3', '--', rel], root);
-      lines.push(`log: ${log.substring(0, 150)}`);
-    } catch (e: any) {
-      lines.push(`log FAILED: ${e.message}`);
-    }
-  } catch (e: any) {
-    lines.push(`rev-parse FAILED: ${e.message}`);
-  }
-
-  // 6. Env PATH
-  lines.push(`PATH: ${(process.env.PATH || '').substring(0, 200)}`);
-
-  return lines.join('\n');
+export interface HotFileInfo {
+  commits2Weeks: number;
+  uniqueAuthors: number;
+  level: 'stable' | 'active' | 'hot';
 }
+
+export async function getHotFileInfo(filePath: string): Promise<HotFileInfo> {
+  const git = await resolveGitBinary();
+  const repoRoot = await getRepoRoot(filePath);
+  const relativePath = path.relative(repoRoot, filePath);
+
+  let commits2Weeks = 0;
+  let uniqueAuthors = 0;
+
+  try {
+    const log = execGit(git, ['log', '--since=2 weeks ago', '--format=%an', '--', relativePath], repoRoot);
+    if (log) {
+      const lines = log.split('\n').filter(Boolean);
+      commits2Weeks = lines.length;
+      uniqueAuthors = new Set(lines).size;
+    }
+  } catch {
+    // No git history
+  }
+
+  let level: 'stable' | 'active' | 'hot' = 'stable';
+  if (commits2Weeks >= 8 || uniqueAuthors >= 3) {
+    level = 'hot';
+  } else if (commits2Weeks >= 3 || uniqueAuthors >= 2) {
+    level = 'active';
+  }
+
+  return { commits2Weeks, uniqueAuthors, level };
+}
+
+export interface FileOwner {
+  name: string;
+  commits: number;
+}
+
+export async function getFileOwners(filePath: string, maxOwners: number = 3): Promise<FileOwner[]> {
+  const git = await resolveGitBinary();
+  const repoRoot = await getRepoRoot(filePath);
+  const relativePath = path.relative(repoRoot, filePath);
+
+  try {
+    const output = execGit(git, ['shortlog', '-sn', '--no-merges', 'HEAD', '--', relativePath], repoRoot);
+    if (!output) return [];
+
+    return output
+      .split('\n')
+      .filter(Boolean)
+      .slice(0, maxOwners)
+      .map((line) => {
+        const match = line.trim().match(/^(\d+)\s+(.+)$/);
+        if (!match) return { name: 'unknown', commits: 0 };
+        return { name: match[2].trim(), commits: parseInt(match[1], 10) };
+      });
+  } catch {
+    return [];
+  }
+}
+
