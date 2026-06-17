@@ -260,12 +260,18 @@
           }
           break;
 
+        case 'showComplete':
+          // Atomic replay of a fully-finished result (used on tab-switch / visibility restore)
+          streamBuffer = message.text || '';
+          const completeMeta = message.metadata ? buildMetadataHtml(message.metadata) : '';
+          content.innerHTML = `<div class="file-name">${escapeHtml(message.fileName)}</div>${completeMeta}<div class="stream-content">${formatBrief(streamBuffer)}</div>`;
+          break;
+
         case 'error':
           content.innerHTML = `<div class="error">${escapeHtml(message.text)}</div>`;
           break;
 
         case 'loading':
-          metadataHtml = '';
           content.innerHTML = `
             <div class="file-name">${escapeHtml(message.fileName || '')}</div>
             <div class="loading">

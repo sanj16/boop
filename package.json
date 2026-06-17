@@ -27,33 +27,19 @@
       }
     ],
     "viewsContainers": {
-      "secondarySidebar": [
+      "panel": [
         {
-          "id": "boop-secondary",
-          "title": "boop",
-          "icon": "resources/boop-icon.svg"
-        }
-      ],
-      "activitybar": [
-        {
-          "id": "boop-activitybar",
+          "id": "boop-panel",
           "title": "boop",
           "icon": "resources/boop-icon.svg"
         }
       ]
     },
     "views": {
-      "boop-secondary": [
+      "boop-panel": [
         {
           "type": "webview",
           "id": "boop.panel",
-          "name": "boop"
-        }
-      ],
-      "boop-activitybar": [
-        {
-          "type": "webview",
-          "id": "boop.panel.cursor",
           "name": "boop"
         }
       ]

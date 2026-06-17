@@ -9,8 +9,12 @@ import { BRIEF_SYSTEM_PROMPT, buildBriefPrompt, CHANGES_SYSTEM_PROMPT, buildChan
 
 let boopPanel: BoopPanel;
 
-// Cache: stores completed results per file
-const cache = new Map<string, { brief?: string; changes?: string }>();
+interface CacheEntry {
+  brief?: string;
+  briefMeta?: { commands?: { label: string; command: string }[]; mainFile?: string; hotFile?: { level: string; commits2Weeks: number; uniqueAuthors: number }; owners?: { name: string; commits: number }[] };
+  changes?: string;
+}
+const cache = new Map<string, CacheEntry>();
 
 function getCacheKey(doc: vscode.TextDocument): string {
   return doc.uri.fsPath;
@@ -28,12 +32,8 @@ export function activate(context: vscode.ExtensionContext) {
   initGraph(context);
   boopPanel = new BoopPanel(context);
 
-  // Register for VS Code (secondarySidebar) and Cursor (activitybar)
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(BoopPanel.viewId, boopPanel, {
-      webviewOptions: { retainContextWhenHidden: true }
-    }),
-    vscode.window.registerWebviewViewProvider(BoopPanel.viewIdCursor, boopPanel, {
       webviewOptions: { retainContextWhenHidden: true }
     })
   );
@@ -150,13 +150,12 @@ async function runBrief(document: vscode.TextDocument) {
   const key = getCacheKey(document);
   const cached = cache.get(key);
 
-  // If cached, show instantly
+  // If cached, replay instantly with full state
   if (cached?.brief) {
     const fileName = document.fileName.split('/').pop() || 'unknown';
     boopPanel.show();
-    boopPanel.startStream(fileName);
-    boopPanel.streamChunk(cached.brief);
-    boopPanel.endStream();
+    boopPanel.setCompleteState(fileName, cached.brief, cached.briefMeta);
+    boopPanel.sendMessage({ type: 'showComplete', fileName, text: cached.brief, metadata: cached.briefMeta });
     return;
   }
 
@@ -166,13 +165,14 @@ async function runBrief(document: vscode.TextDocument) {
   try {
     const ctx = await gatherFileContext(document);
     const userPrompt = buildBriefPrompt(ctx);
-
-    boopPanel.startStream(ctx.fileName, {
+    const metadata = {
       commands: ctx.entrypoint?.commands,
       mainFile: ctx.entrypoint?.mainFile,
       hotFile: ctx.hotFile,
       owners: ctx.owners,
-    });
+    };
+
+    boopPanel.startStream(ctx.fileName, metadata);
 
     let fullText = '';
 
@@ -185,8 +185,10 @@ async function runBrief(document: vscode.TextDocument) {
       },
       () => {
         boopPanel.endStream();
+        boopPanel.setCompleteState(ctx.fileName, fullText, metadata);
         const entry = cache.get(key) || {};
         entry.brief = fullText;
+        entry.briefMeta = metadata;
         cache.set(key, entry);
       },
       (error) => boopPanel.showError(error)
@@ -200,13 +202,13 @@ async function runChangeReview(document: vscode.TextDocument) {
   const key = getCacheKey(document);
   const cached = cache.get(key);
 
-  // If cached, show instantly
+  // If cached, replay instantly with full state
   if (cached?.changes) {
     const fileName = document.fileName.split('/').pop() || 'unknown';
+    const changesFileName = `${fileName} — impact`;
     boopPanel.show();
-    boopPanel.startStream(`${fileName} — impact`);
-    boopPanel.streamChunk(cached.changes);
-    boopPanel.endStream();
+    boopPanel.setCompleteState(changesFileName, cached.changes);
+    boopPanel.sendMessage({ type: 'showComplete', fileName: changesFileName, text: cached.changes });
     return;
   }
 
@@ -226,7 +228,8 @@ async function runChangeReview(document: vscode.TextDocument) {
   try {
     const userPrompt = buildChangesPrompt(ctx);
 
-    boopPanel.startStream(`${ctx.fileName} — impact`);
+    const changesFileName = `${ctx.fileName} — impact`;
+    boopPanel.startStream(changesFileName);
 
     let fullText = '';
 
@@ -239,7 +242,7 @@ async function runChangeReview(document: vscode.TextDocument) {
       },
       () => {
         boopPanel.endStream();
-        // Cache the completed result
+        boopPanel.setCompleteState(changesFileName, fullText);
         const entry = cache.get(key) || {};
         entry.changes = fullText;
         cache.set(key, entry);

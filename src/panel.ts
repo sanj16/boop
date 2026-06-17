@@ -4,12 +4,11 @@ import * as fs from 'fs';
 
 export class BoopPanel implements vscode.WebviewViewProvider {
   public static readonly viewId = 'boop.panel';
-  public static readonly viewIdCursor = 'boop.panel.cursor';
 
   private view: vscode.WebviewView | null = null;
   private context: vscode.ExtensionContext;
   private disposeCallbacks: Array<() => void> = [];
-  private pendingMessages: any[] = [];
+  private lastState: { payload: any } | null = null;
 
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
@@ -20,6 +19,7 @@ export class BoopPanel implements vscode.WebviewViewProvider {
     _context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken
   ): void {
+    // Always re-initialize — Cursor recreates the webview when switching tabs
     this.view = webviewView;
 
     webviewView.webview.options = {
@@ -31,11 +31,22 @@ export class BoopPanel implements vscode.WebviewViewProvider {
 
     webviewView.webview.html = this.getHtml();
 
+    // Replay last known state immediately after init
+    if (this.lastState) {
+      webviewView.webview.postMessage(this.lastState.payload);
+    }
+
+    // Also replay when visibility changes (tab switch back)
+    webviewView.onDidChangeVisibility(() => {
+      if (webviewView.visible && this.lastState) {
+        webviewView.webview.postMessage(this.lastState.payload);
+      }
+    });
+
     webviewView.webview.onDidReceiveMessage(
       (message) => {
         if (message.type === 'close') {
-          // Hide the sidebar
-          vscode.commands.executeCommand('workbench.action.closeSidebar');
+          vscode.commands.executeCommand('workbench.action.closePanel');
         }
       },
       undefined,
@@ -43,15 +54,11 @@ export class BoopPanel implements vscode.WebviewViewProvider {
     );
 
     webviewView.onDidDispose(() => {
-      this.view = null;
+      if (this.view === webviewView) {
+        this.view = null;
+      }
       this.disposeCallbacks.forEach((cb) => cb());
     });
-
-    // Send any messages that were queued before the view was ready
-    for (const msg of this.pendingMessages) {
-      webviewView.webview.postMessage(msg);
-    }
-    this.pendingMessages = [];
   }
 
   onDispose(callback: () => void): void {
@@ -63,31 +70,23 @@ export class BoopPanel implements vscode.WebviewViewProvider {
   }
 
   show(): void {
-    if (this.view) {
-      this.view.show?.(true);
-    } else {
-      // Reveal the boop sidebar which will trigger resolveWebviewView
-      vscode.commands.executeCommand('boop.panel.focus');
-    }
+    vscode.commands.executeCommand(`${BoopPanel.viewId}.focus`);
   }
 
   dispose(): void {
-    // For sidebar views, we just hide it
-    vscode.commands.executeCommand('workbench.action.closeSidebar');
     this.disposeCallbacks.forEach((cb) => cb());
   }
 
   sendMessage(message: any): void {
-    if (this.view) {
-      this.view.webview.postMessage(message);
-    } else {
-      this.pendingMessages.push(message);
-    }
+    this.view?.webview.postMessage(message);
   }
 
   startStream(fileName: string, metadata?: { commands?: { label: string; command: string }[]; mainFile?: string; hotFile?: { level: string; commits2Weeks: number; uniqueAuthors: number }; owners?: { name: string; commits: number }[] }): void {
     this.show();
-    this.sendMessage({ type: 'startStream', fileName, metadata });
+    const msg = { type: 'startStream', fileName, metadata };
+    // Store start state so visibility replay shows at least metadata while streaming
+    this.lastState = { payload: msg };
+    this.sendMessage(msg);
   }
 
   streamChunk(text: string): void {
@@ -98,14 +97,25 @@ export class BoopPanel implements vscode.WebviewViewProvider {
     this.sendMessage({ type: 'endStream' });
   }
 
+  // Call this after streaming completes so tab-switch replays the full result
+  setCompleteState(fileName: string, text: string, metadata?: { commands?: { label: string; command: string }[]; mainFile?: string; hotFile?: { level: string; commits2Weeks: number; uniqueAuthors: number }; owners?: { name: string; commits: number }[] }): void {
+    this.lastState = {
+      payload: { type: 'showComplete', fileName, text, metadata }
+    };
+  }
+
   showError(text: string): void {
     this.show();
-    this.sendMessage({ type: 'error', text });
+    const msg = { type: 'error', text };
+    this.lastState = { payload: msg };
+    this.sendMessage(msg);
   }
 
   showLoading(fileName: string, text?: string): void {
     this.show();
-    this.sendMessage({ type: 'loading', fileName, text: text || 'Analyzing...' });
+    const msg = { type: 'loading', fileName, text: text || 'Analyzing...' };
+    this.lastState = { payload: msg };
+    this.sendMessage(msg);
   }
 
   private getHtml(): string {
