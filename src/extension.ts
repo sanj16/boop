@@ -28,6 +28,17 @@ export function activate(context: vscode.ExtensionContext) {
   initGraph(context);
   boopPanel = new BoopPanel(context);
 
+  // Register for VS Code (secondarySidebar) and Cursor (activitybar)
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(BoopPanel.viewId, boopPanel, {
+      webviewOptions: { retainContextWhenHidden: true }
+    }),
+    vscode.window.registerWebviewViewProvider(BoopPanel.viewIdCursor, boopPanel, {
+      webviewOptions: { retainContextWhenHidden: true }
+    })
+  );
+
+
   // Clear cache when panel is fully closed
   boopPanel.onDispose(() => {
     clearCache();

@@ -26,6 +26,38 @@
         "title": "Boop: Review Changes"
       }
     ],
+    "viewsContainers": {
+      "secondarySidebar": [
+        {
+          "id": "boop-secondary",
+          "title": "boop",
+          "icon": "resources/boop-icon.svg"
+        }
+      ],
+      "activitybar": [
+        {
+          "id": "boop-activitybar",
+          "title": "boop",
+          "icon": "resources/boop-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "boop-secondary": [
+        {
+          "type": "webview",
+          "id": "boop.panel",
+          "name": "boop"
+        }
+      ],
+      "boop-activitybar": [
+        {
+          "type": "webview",
+          "id": "boop.panel.cursor",
+          "name": "boop"
+        }
+      ]
+    },
     "configuration": {
       "title": "boop",
       "properties": {
